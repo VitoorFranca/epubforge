@@ -28,6 +28,23 @@ jobs:
       - name: Test
         run: npm test
 
+      - name: Check versions are not already published
+        run: |
+          CORE_VER=$(node -p "require('./core/package.json').version")
+          CLI_VER=$(node -p "require('./cli/package.json').version")
+
+          if npm view "@epubforge/core@$CORE_VER" version 2>/dev/null | grep -q "$CORE_VER"; then
+            echo "::error::@epubforge/core@$CORE_VER is already on npm. Bump the version before tagging."
+            exit 1
+          fi
+
+          if npm view "epubforge@$CLI_VER" version 2>/dev/null | grep -q "$CLI_VER"; then
+            echo "::error::epubforge@$CLI_VER is already on npm. Bump the version before tagging."
+            exit 1
+          fi
+
+          echo "Versions available for publish: core@$CORE_VER, cli@$CLI_VER"
+
   publish:
     name: Publish to npm
     needs: build-and-test
@@ -49,9 +66,6 @@ jobs:
 
       - name: Build
         run: npm run build
-
-      - name: Test
-        run: npm test
 
       - name: Publish @epubforge/core
         run: npm publish -w core --no-git-checks --ignore-scripts

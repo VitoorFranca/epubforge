@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 import { Command } from 'commander';
 import { resolve, join } from 'path';
-import { existsSync } from 'fs';
+import { existsSync, statSync } from 'fs';
 import { Logger } from '../utils/logger.js';
 import { slugify } from '../utils/slugify.js';
 import { withTempDir } from '../utils/tempDir.js';
@@ -139,9 +139,7 @@ async function run(options: CliOptions): Promise<void> {
       // Step 6: Build EPUB
       logger.step(5, 6, 'Generating EPUB...');
 
-      const outputPath = options.output
-        ? resolve(options.output)
-        : resolve(`${slugify(metadata.title)}.epub`);
+      const outputPath = resolveOutputPath(options.output, metadata.title);
 
       const builder = new EpubBuilder(logger);
       const result = await builder.build({
@@ -163,6 +161,22 @@ async function run(options: CliOptions): Promise<void> {
     logger.error(message);
     process.exit(1);
   }
+}
+
+function resolveOutputPath(output: string | undefined, title: string): string {
+  const filename = `${slugify(title) || 'article'}.epub`;
+  if (!output) return resolve(filename);
+
+  const resolved = resolve(output);
+  // If the path is an existing directory, write <title>.epub inside it
+  if (existsSync(resolved) && statSync(resolved).isDirectory()) {
+    return join(resolved, filename);
+  }
+  // If it looks like a directory name (no extension, doesn't exist yet), treat as dir
+  if (!output.endsWith('.epub') && !output.includes('.')) {
+    return join(resolved, filename);
+  }
+  return resolved;
 }
 
 async function checkPandoc(logger: Logger): Promise<void> {

@@ -114,13 +114,16 @@ ${content}
       '--css', cssPath,
       '--toc',
       '--toc-depth=3',
-      '--epub-chapter-level=2',
+      '--split-level=2',
       `--metadata=title:${this.shellEscape(metadata.title)}`,
       `--metadata=lang:${metadata.language ?? 'en'}`,
     ];
 
-    if (metadata.author) {
-      args.push(`--metadata=author:${this.shellEscape(metadata.author)}`);
+    // Skip author if it looks like a raw username handle (e.g. "@" or "@user")
+    const author = metadata.author;
+    const isValidAuthor = author && author.length > 1 && !author.match(/^@\w*$/);
+    if (isValidAuthor) {
+      args.push(`--metadata=author:${this.shellEscape(author)}`);
     }
 
     if (metadata.date) {

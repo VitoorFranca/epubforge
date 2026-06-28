@@ -1,0 +1,36 @@
+{
+  "name": "epubforge",
+  "version": "0.1.0",
+  "description": "Transform web content into high-quality EPUB files for e-readers",
+  "type": "module",
+  "main": "./dist/index.js",
+  "bin": {
+    "epubforge": "./dist/index.js"
+  },
+  "scripts": {
+    "build": "tsc",
+    "typecheck": "tsc --noEmit"
+  },
+  "keywords": [
+    "epub",
+    "ebook",
+    "kindle",
+    "converter",
+    "readability",
+    "playwright",
+    "pandoc"
+  ],
+  "author": "EpubForge Contributors",
+  "license": "MIT",
+  "dependencies": {
+    "@epubforge/core": "^0.1.0",
+    "commander": "^12.1.0"
+  },
+  "devDependencies": {
+    "@types/node": "^22.0.0",
+    "typescript": "^5.6.0"
+  },
+  "engines": {
+    "node": ">=20.0.0"
+  }
+}

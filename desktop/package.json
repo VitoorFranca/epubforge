@@ -1,0 +1,7 @@
+{
+  "name": "@epubforge/desktop",
+  "version": "0.1.0",
+  "description": "EpubForge desktop application (Electron) — not yet implemented",
+  "private": true,
+  "license": "MIT"
+}

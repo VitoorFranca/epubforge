@@ -1,6 +1,6 @@
 # EpubForge
 
-Transform web articles, documentation, and online content into high-quality EPUB files for e-readers (Kindle, Kobo, Boox, PocketBook, etc).
+Transform web articles and online content into high-quality EPUB files for e-readers (Kindle, Kobo, Boox, PocketBook, etc).
 
 ## Philosophy
 
@@ -14,6 +14,7 @@ It removes ads, popups, navigation menus, sidebars, comment sections, tracking s
 - Extracts article content using Mozilla Readability (the same engine as Firefox Reader Mode)
 - Downloads and embeds images locally — no external links in the final EPUB
 - Extracts metadata automatically (title, author, date, language, description, cover image)
+- Syntax-highlighted code blocks via Pandoc/Skylighting
 - Generates a Table of Contents automatically
 - Custom CSS optimized for e-reader typography
 - Dark theme option
@@ -36,65 +37,97 @@ sudo apt install pandoc
 
 ```sh
 npm install -g epubforge
-npx playwright install chromium
 ```
 
-Or clone and build from source:
+Chromium is downloaded automatically on install. If it doesn't happen, run:
 
 ```sh
-git clone https://github.com/yourusername/epubforge
-cd epubforge
-npm install
 npx playwright install chromium
-npm run build
-npm link
 ```
 
 ## Usage
 
 ```sh
 # Basic conversion
-epubforge https://example.com/article
+epubforge https://dev.to/user/article
+
+# Save to a specific directory
+epubforge https://dev.to/user/article --output ~/Books/
+
+# Save to a specific file
+epubforge https://dev.to/user/article --output my-book.epub
 
 # Override title and author
-epubforge https://example.com/article --title "My Book" --author "Jane Doe"
-
-# Custom output path
-epubforge https://example.com/article --output my-book.epub
+epubforge https://dev.to/user/article --title "My Book" --author "Jane Doe"
 
 # Add a cover image
-epubforge https://example.com/article --cover cover.jpg
+epubforge https://dev.to/user/article --cover cover.jpg
 
-# Skip image downloading
-epubforge https://example.com/article --no-keep-images
+# Skip image downloading (faster, smaller file)
+epubforge https://dev.to/user/article --no-keep-images
 
 # Apply dark theme
-epubforge https://example.com/article --dark-theme
+epubforge https://dev.to/user/article --dark-theme
 
 # Verbose output for debugging
-epubforge https://example.com/article --verbose
+epubforge https://dev.to/user/article --verbose
 
-# Override language
-epubforge https://example.com/article --language pt
+# Override language metadata
+epubforge https://dev.to/user/article --language pt
+```
+
+### Medium articles
+
+Free articles work directly:
+
+```sh
+epubforge https://medium.com/user/article-slug
+```
+
+Paywalled (member-only) articles require [Freedium](https://freedium.cfd):
+
+```sh
+epubforge https://freedium.cfd/https://medium.com/user/article-slug
+```
+
+## As a library
+
+`@epubforge/core` can be used programmatically in any Node.js application:
+
+```sh
+npm install @epubforge/core
+```
+
+```ts
+import { generateEpub } from '@epubforge/core';
+
+const result = await generateEpub({
+  url: 'https://dev.to/user/article',
+  output: './books/',       // directory or .epub path (default: current dir)
+  title: 'My Book',        // optional override
+  author: 'Jane Doe',      // optional override
+  language: 'en',          // optional override
+  keepImages: true,         // default: true
+  darkTheme: false,         // default: false
+  verbose: false,           // default: false
+});
+
+console.log(result.outputPath);  // '/path/to/my-book.epub'
+console.log(result.sizeBytes);   // 1048576
 ```
 
 ## Architecture
 
+This is a monorepo with three packages:
+
 ```
-src/
-├── cli/               # Entry point, argument parsing (Commander)
-├── crawler/           # Page rendering (Playwright)
-├── extractor/         # Importer interface + ArticleExtractor
-├── readability/       # Content extraction (Mozilla Readability + JSDOM)
-├── html/              # HtmlCleaner, HtmlNormalizer, ImageDownloader
-├── metadata/          # MetadataExtractor (OG, schema.org, heuristics)
-├── epub/              # EPUB generation (Pandoc)
-│   └── assets/        # Reader CSS stylesheet
-├── utils/             # Logger, slugify, tempDir, mimeType
-└── types/             # Shared TypeScript types
+epubforge/
+├── core/        @epubforge/core — all business logic, usable as a library
+├── cli/         epubforge       — thin CLI that calls core
+└── desktop/                    — future Electron app (not yet implemented)
 ```
 
-### Data Flow
+### core pipeline
 
 ```
 URL
@@ -126,7 +159,7 @@ output.epub
 
 ### Extensibility
 
-The `Importer` interface allows new content sources to be added without touching the core:
+The `Importer` interface allows new content sources to be added without touching core:
 
 ```ts
 interface Importer {
@@ -135,33 +168,27 @@ interface Importer {
 }
 ```
 
-Planned importers: `DocumentationImporter`, `PdfImporter`, `MarkdownImporter`, `HtmlImporter`.
+`MediumImporter` is the first implementation — it uses stealth Playwright with JS blocking to fetch Medium articles without triggering the auth redirect.
 
 ## Development
 
 ```sh
-npm test           # Run unit tests (Vitest)
-npm run typecheck  # TypeScript type checking
-npm run lint       # ESLint
-npm run format     # Prettier
-npm run build      # Compile to dist/
-npm run dev -- https://example.com/article  # Run without building
+git clone https://github.com/VitoorFranca/epubforge.git
+cd epubforge
+npm install
+npm run build      # builds core then cli
+npm test           # runs unit tests (Vitest, core only)
+npm run typecheck  # TypeScript type checking across all packages
 ```
 
 ## Roadmap
 
-- [ ] Full documentation site crawler (crawl all pages → single EPUB book)
-- [ ] Multiple articles → single EPUB book
-- [ ] PDF → EPUB
-- [ ] Markdown → EPUB
-- [ ] DOCX → EPUB
+- [ ] Full documentation site crawler (crawl all pages → single EPUB)
+- [ ] Multiple articles → single EPUB
 - [ ] RSS feed → EPUB
-- [ ] AI chapter summarization
-- [ ] AI cover generation
-- [ ] Kindle sync
-- [ ] Kobo sync
+- [ ] Markdown / DOCX → EPUB
+- [ ] Desktop app (Electron)
 - [ ] Web interface
-- [ ] Desktop app
 - [ ] REST API
 
 ## Contributing

@@ -1,6 +1,6 @@
 {
   "name": "@epubforge/core",
-  "version": "1.0.1",
+  "version": "1.0.2",
   "description": "Core library for converting web articles to EPUB files",
   "type": "module",
   "main": "./dist/index.js",

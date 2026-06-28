@@ -1,6 +1,6 @@
 {
   "name": "epubforge",
-  "version": "1.0.1",
+  "version": "1.0.2",
   "description": "Transform web content into high-quality EPUB files for e-readers",
   "type": "module",
   "main": "./dist/index.js",

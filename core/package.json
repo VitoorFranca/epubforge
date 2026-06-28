@@ -1,6 +1,6 @@
 {
   "name": "@epubforge/core",
-  "version": "0.1.0",
+  "version": "1.0.0",
   "description": "Core library for converting web articles to EPUB files",
   "type": "module",
   "main": "./dist/index.js",
@@ -11,12 +11,41 @@
       "types": "./dist/index.d.ts"
     }
   },
+  "files": [
+    "dist"
+  ],
   "scripts": {
     "build": "tsc && npm run copy-assets",
     "copy-assets": "mkdir -p dist/epub/assets && cp src/epub/assets/styles.css dist/epub/assets/styles.css",
+    "prepublishOnly": "npm run build && npm test",
+    "postinstall": "playwright install chromium",
     "test": "vitest run",
     "test:watch": "vitest",
     "typecheck": "tsc --noEmit"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/VitoorFranca/epubforge.git",
+    "directory": "core"
+  },
+  "homepage": "https://github.com/VitoorFranca/epubforge#readme",
+  "bugs": "https://github.com/VitoorFranca/epubforge/issues",
+  "keywords": [
+    "epub",
+    "ebook",
+    "kindle",
+    "kobo",
+    "converter",
+    "readability",
+    "playwright",
+    "pandoc",
+    "article",
+    "web-scraping"
+  ],
+  "author": "Vitor França <franc.vitoor@gmail.com>",
+  "license": "MIT",
+  "publishConfig": {
+    "access": "public"
   },
   "dependencies": {
     "@mozilla/readability": "^0.5.0",
@@ -32,6 +61,5 @@
   },
   "engines": {
     "node": ">=20.0.0"
-  },
-  "license": "MIT"
+  }
 }

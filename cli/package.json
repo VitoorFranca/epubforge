@@ -1,29 +1,44 @@
 {
   "name": "epubforge",
-  "version": "0.1.0",
+  "version": "1.0.0",
   "description": "Transform web content into high-quality EPUB files for e-readers",
   "type": "module",
   "main": "./dist/index.js",
   "bin": {
     "epubforge": "./dist/index.js"
   },
+  "files": [
+    "dist"
+  ],
   "scripts": {
     "build": "tsc",
+    "prepublishOnly": "npm run build",
     "typecheck": "tsc --noEmit"
   },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/VitoorFranca/epubforge.git",
+    "directory": "cli"
+  },
+  "homepage": "https://github.com/VitoorFranca/epubforge#readme",
+  "bugs": "https://github.com/VitoorFranca/epubforge/issues",
   "keywords": [
     "epub",
     "ebook",
     "kindle",
+    "kobo",
     "converter",
     "readability",
     "playwright",
-    "pandoc"
+    "pandoc",
+    "article",
+    "web-scraping",
+    "cli"
   ],
-  "author": "EpubForge Contributors",
+  "author": "Vitor França <franc.vitoor@gmail.com>",
   "license": "MIT",
   "dependencies": {
-    "@epubforge/core": "^0.1.0",
+    "@epubforge/core": "^1.0.0",
     "commander": "^12.1.0"
   },
   "devDependencies": {

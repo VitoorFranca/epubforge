@@ -1,0 +1,41 @@
+{
+  "$schema": "https://schema.tauri.app/config/2",
+  "productName": "EpubForge",
+  "version": "0.1.0",
+  "identifier": "com.epubforge.desktop",
+  "build": {
+    "frontendDist": "../dist",
+    "devUrl": "http://localhost:1420",
+    "beforeDevCommand": "npm run vite",
+    "beforeBuildCommand": "npm run build:sidecar && npm run vite:build"
+  },
+  "app": {
+    "windows": [
+      {
+        "title": "EpubForge",
+        "width": 600,
+        "height": 450,
+        "resizable": false,
+        "center": true
+      }
+    ],
+    "security": {
+      "csp": null
+    }
+  },
+  "bundle": {
+    "active": true,
+    "targets": "all",
+    "icon": [
+      "icons/32x32.png",
+      "icons/128x128.png",
+      "icons/128x128@2x.png",
+      "icons/icon.icns",
+      "icons/icon.ico"
+    ],
+    "resources": {
+      "../sidecar/bundle.cjs": "sidecar/bundle.cjs",
+      "../sidecar/assets/styles.css": "sidecar/assets/styles.css"
+    }
+  }
+}

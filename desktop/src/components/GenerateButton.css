@@ -1,0 +1,20 @@
+.generate-button {
+  padding: 10px 20px;
+  background: #0066cc;
+  color: #fff;
+  border: none;
+  border-radius: 6px;
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  align-self: flex-start;
+}
+
+.generate-button:hover:not(:disabled) {
+  background: #0055aa;
+}
+
+.generate-button:disabled {
+  background: #b0c8e8;
+  cursor: not-allowed;
+}

@@ -1,0 +1,1 @@
+{"default":{"identifier":"default","description":"Permissions for EpubForge desktop window","local":true,"windows":["main"],"permissions":["core:default","dialog:allow-save","dialog:allow-message"]}}

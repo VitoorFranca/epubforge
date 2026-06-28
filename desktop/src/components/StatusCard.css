@@ -1,0 +1,15 @@
+.status-card {
+  padding: 10px 14px;
+  border-radius: 6px;
+  font-size: 13px;
+}
+
+.status-card--generating {
+  background: #f0f4ff;
+  color: #3360aa;
+}
+
+.status-card--done {
+  background: #f0fff4;
+  color: #1a6e38;
+}

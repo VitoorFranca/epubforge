@@ -1,0 +1,10 @@
+{
+  "identifier": "default",
+  "description": "Permissions for EpubForge desktop window",
+  "windows": ["main"],
+  "permissions": [
+    "core:default",
+    "dialog:allow-save",
+    "dialog:allow-message"
+  ]
+}

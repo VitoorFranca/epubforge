@@ -1,7 +1,33 @@
 {
   "name": "@epubforge/desktop",
   "version": "0.1.0",
-  "description": "EpubForge desktop application (Electron) — not yet implemented",
+  "description": "EpubForge desktop application",
   "private": true,
-  "license": "MIT"
+  "type": "module",
+  "license": "MIT",
+  "scripts": {
+    "dev": "tauri dev",
+    "build": "tauri build",
+    "vite": "vite --port 1420",
+    "vite:build": "vite build",
+    "build:sidecar": "mkdir -p sidecar/assets && esbuild sidecar/index.mjs --bundle --platform=node --format=cjs --outfile=sidecar/bundle.cjs --external:fsevents --external:playwright --external:playwright-core --external:chromium-bidi && cp ../core/dist/epub/assets/styles.css sidecar/assets/styles.css",
+    "tauri": "tauri"
+  },
+  "dependencies": {
+    "@epubforge/core": "^1.0.0",
+    "@tauri-apps/api": "^2",
+    "@tauri-apps/plugin-dialog": "^2"
+  },
+  "devDependencies": {
+    "@tauri-apps/cli": "^2",
+    "@types/node": "^22",
+    "@types/react": "^18",
+    "@types/react-dom": "^18",
+    "@vitejs/plugin-react": "^4",
+    "esbuild": "^0.24",
+    "react": "^18",
+    "react-dom": "^18",
+    "typescript": "^5.6",
+    "vite": "^6"
+  }
 }

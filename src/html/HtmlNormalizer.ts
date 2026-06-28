@@ -71,25 +71,50 @@ export class HtmlNormalizer {
     }
   }
 
+  // Normalize language aliases to what Pandoc's Skylighting recognizes
+  private readonly LANG_ALIASES: Record<string, string> = {
+    shell: 'bash', sh: 'bash', zsh: 'bash',
+    js: 'javascript', jsx: 'javascript',
+    ts: 'typescript', tsx: 'typescript',
+    py: 'python', rb: 'ruby', rs: 'rust',
+    yml: 'yaml', dockerfile: 'docker',
+    plaintext: 'text', plain: 'text',
+  };
+
   private normalizeCodeBlocks(doc: Document): void {
     doc.querySelectorAll('pre code, pre').forEach((el) => {
-      // Detect language from class (e.g. language-js, lang-python)
       const cls = el.getAttribute('class') ?? '';
-      const langMatch = cls.match(/(?:language|lang)-(\w+)/);
-      if (langMatch && el.tagName === 'CODE') {
-        el.setAttribute('class', `language-${langMatch[1]}`);
+
+      // Patterns: "language-ts", "lang-python", "highlight typescript" (dev.to)
+      const rawLang =
+        cls.match(/(?:language|lang)-(\w+)/)?.[1] ??
+        (cls.includes('highlight') ? cls.replace('highlight', '').trim().split(/\s+/)[0] : null);
+      const lang = rawLang ? (this.LANG_ALIASES[rawLang] ?? rawLang) : null;
+
+      if (lang && el.tagName === 'CODE') {
+        el.setAttribute('class', `language-${lang}`);
       }
 
-      // Preserve whitespace by removing extraneous HTML inside pre
+      // Propagate language from <pre class="highlight typescript"> down to inner <code>
+      if (el.tagName === 'PRE' && lang) {
+        const inner = el.querySelector('code');
+        if (inner && !inner.getAttribute('class')) {
+          inner.setAttribute('class', `language-${lang}`);
+        }
+      }
+
+      // Rebuild <pre> with clean plain-text <code> to strip site-specific
+      // syntax highlighting spans (e.g. dev.to wraps tokens in <span>).
+      // Clear the <pre> class so Pandoc reads only the <code class="language-*">
+      // and re-highlights using Skylighting.
       if (el.tagName === 'PRE') {
         const text = el.textContent ?? '';
-        const code = el.querySelector('code');
-        if (!code) {
-          const codeEl = doc.createElement('code');
-          codeEl.textContent = text;
-          el.innerHTML = '';
-          el.appendChild(codeEl);
-        }
+        const codeEl = doc.createElement('code');
+        if (lang) codeEl.setAttribute('class', `language-${lang}`);
+        codeEl.textContent = text;
+        el.removeAttribute('class');
+        el.innerHTML = '';
+        el.appendChild(codeEl);
       }
     });
   }

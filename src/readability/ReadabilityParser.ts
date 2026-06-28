@@ -14,8 +14,10 @@ export class ReadabilityParser {
     this.logger.debug('Parsing article with Readability');
 
     const dom = new JSDOM(html, { url });
+    // keepClasses: true so code block language classes (e.g. "highlight typescript")
+    // survive into HtmlCleaner, which then strips everything except allowed attributes.
     const reader = new Readability(dom.window.document, {
-      keepClasses: false,
+      keepClasses: true,
       disableJSONLD: false,
     });
 

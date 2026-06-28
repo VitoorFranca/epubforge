@@ -7,3 +7,4 @@ coverage/
 .vitest/
 tmp/
 *.tmp
+.epubforge-work

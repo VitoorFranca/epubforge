@@ -46,10 +46,7 @@ export class PlaywrightCrawler {
     await this.blockUnnecessaryResources(page);
 
     this.logger.debug(`Navigating to ${url}`);
-    const response = await page.goto(url, {
-      waitUntil: this.options.waitUntil,
-      timeout: this.options.timeout,
-    });
+    const response = await this.navigateWithFallback(page, url);
 
     if (!response) {
       throw new Error(`Failed to load page: ${url}`);
@@ -69,6 +66,33 @@ export class PlaywrightCrawler {
     await context.close();
 
     return { url, html, finalUrl };
+  }
+
+  private async navigateWithFallback(
+    page: Page,
+    url: string,
+  ): Promise<Awaited<ReturnType<Page['goto']>>> {
+    // Try networkidle first; many sites (Medium, etc.) keep requests alive forever,
+    // so fall back to load + a short wait to let JS render.
+    try {
+      return await page.goto(url, {
+        waitUntil: this.options.waitUntil,
+        timeout: this.options.timeout,
+      });
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      if (!message.includes('Timeout') || this.options.waitUntil !== 'networkidle') {
+        throw err;
+      }
+      this.logger.debug('networkidle timed out — retrying with load');
+      const response = await page.goto(url, {
+        waitUntil: 'load',
+        timeout: this.options.timeout,
+      });
+      // Give JS frameworks a moment to render after load
+      await page.waitForTimeout(2000);
+      return response;
+    }
   }
 
   private async blockUnnecessaryResources(page: Page): Promise<void> {

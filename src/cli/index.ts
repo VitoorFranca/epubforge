@@ -12,6 +12,7 @@ import { HtmlNormalizer } from '../html/HtmlNormalizer.js';
 import { ImageDownloader } from '../html/ImageDownloader.js';
 import { MetadataExtractor } from '../metadata/MetadataExtractor.js';
 import { ArticleExtractor } from '../extractor/ArticleExtractor.js';
+import { MediumImporter } from '../extractor/MediumImporter.js';
 import { EpubBuilder } from '../epub/EpubBuilder.js';
 import type { CliOptions } from '../types/index.js';
 
@@ -58,27 +59,47 @@ async function run(options: CliOptions): Promise<void> {
     logger.info(`Forging EPUB from: ${options.url}`);
 
     await withTempDir(async (tempDir) => {
-      // Step 1: Crawl (single browser launch — result reused for metadata + extraction)
-      logger.step(1, 6, 'Fetching page...');
-      const crawler = new PlaywrightCrawler(logger, { verbose: options.verbose });
-      const crawlResult = await crawler.fetch(options.url);
-
-      // Step 2: Extract metadata
-      logger.step(2, 6, 'Extracting metadata...');
       const metaExtractor = new MetadataExtractor(logger);
-      const metadata = metaExtractor.extract(crawlResult.html, crawlResult.finalUrl);
+      const mediumImporter = new MediumImporter(logger);
+      const isMedium = mediumImporter.canHandle(options.url);
+
+      let crawlHtml: string;
+      let finalUrl: string;
+      let parsed;
+
+      if (isMedium) {
+        // Medium path: stealth browser fetches SSR HTML, blocks JS to avoid redirect,
+        // then exposes both the raw HTML (for metadata) and the extracted article.
+        logger.step(1, 6, 'Fetching Medium article (stealth mode)...');
+        logger.step(3, 6, 'Parsing article content...');
+        logger.debug('Using MediumImporter (stealth + JS-blocked SSR)');
+        const mediumResult = await mediumImporter.importWithRawHtml(options.url);
+        crawlHtml = mediumResult.html;
+        finalUrl = options.url;
+        parsed = mediumResult.article;
+      } else {
+        // Standard path: single Playwright crawl reused for metadata + extraction
+        logger.step(1, 6, 'Fetching page...');
+        const crawler = new PlaywrightCrawler(logger, { verbose: options.verbose });
+        const crawlResult = await crawler.fetch(options.url);
+        crawlHtml = crawlResult.html;
+        finalUrl = crawlResult.finalUrl;
+
+        logger.step(3, 6, 'Parsing article content...');
+        const parser = new ReadabilityParser(logger);
+        const cleaner = new HtmlCleaner(logger);
+        const normalizer = new HtmlNormalizer(logger);
+        const extractor = new ArticleExtractor(crawler, parser, cleaner, normalizer, logger);
+        parsed = extractor.extractFromCrawlResult(crawlResult);
+      }
+
+      // Step 2: Extract metadata (from whichever HTML we fetched)
+      logger.step(2, 6, 'Extracting metadata...');
+      const metadata = metaExtractor.extract(crawlHtml, finalUrl, parsed.title);
 
       if (options.title) metadata.title = options.title;
       if (options.author) metadata.author = options.author;
       if (options.language) metadata.language = options.language;
-
-      // Step 3: Parse article (reuses crawlResult — no second browser launch)
-      logger.step(3, 6, 'Parsing article content...');
-      const parser = new ReadabilityParser(logger);
-      const cleaner = new HtmlCleaner(logger);
-      const normalizer = new HtmlNormalizer(logger);
-      const extractor = new ArticleExtractor(crawler, parser, cleaner, normalizer, logger);
-      const parsed = extractor.extractFromCrawlResult(crawlResult);
 
       // Step 4: Download images
       let content = parsed.content;

@@ -1,0 +1,57 @@
+{
+  "name": "epubforge",
+  "version": "0.1.0",
+  "description": "Transform web content into high-quality EPUB files for e-readers",
+  "type": "module",
+  "main": "./dist/cli/index.js",
+  "bin": {
+    "epubforge": "./dist/cli/index.js"
+  },
+  "scripts": {
+    "build": "tsc && npm run copy-assets",
+    "copy-assets": "mkdir -p dist/epub/assets && cp src/epub/assets/styles.css dist/epub/assets/styles.css",
+    "dev": "tsx src/cli/index.ts",
+    "start": "node dist/cli/index.js",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "test:coverage": "vitest run --coverage",
+    "lint": "eslint src --ext .ts",
+    "lint:fix": "eslint src --ext .ts --fix",
+    "format": "prettier --write src",
+    "format:check": "prettier --check src",
+    "typecheck": "tsc --noEmit"
+  },
+  "keywords": [
+    "epub",
+    "ebook",
+    "kindle",
+    "converter",
+    "readability",
+    "playwright",
+    "pandoc"
+  ],
+  "author": "EpubForge Contributors",
+  "license": "MIT",
+  "dependencies": {
+    "@mozilla/readability": "^0.5.0",
+    "commander": "^12.1.0",
+    "jsdom": "^25.0.0",
+    "playwright": "^1.48.0"
+  },
+  "devDependencies": {
+    "@types/jsdom": "^21.1.7",
+    "@types/mozilla__readability": "^0.4.2",
+    "@types/node": "^22.0.0",
+    "@typescript-eslint/eslint-plugin": "^8.0.0",
+    "@typescript-eslint/parser": "^8.0.0",
+    "@vitest/coverage-v8": "^2.1.0",
+    "eslint": "^9.0.0",
+    "prettier": "^3.3.0",
+    "tsx": "^4.19.0",
+    "typescript": "^5.6.0",
+    "vitest": "^2.1.0"
+  },
+  "engines": {
+    "node": ">=20.0.0"
+  }
+}

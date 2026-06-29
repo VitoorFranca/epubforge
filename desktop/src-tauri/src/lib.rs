@@ -1,5 +1,5 @@
 use std::io::{BufRead, BufReader, Write};
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 use std::process::{Command, Stdio};
 use serde::Serialize;
 
@@ -43,13 +43,18 @@ fn run_sidecar(
 ) -> Result<GenerateResult, String> {
     let input = serde_json::json!({ "url": url, "outputPath": output_path });
 
-    let mut child = Command::new("node")
-        .arg(&sidecar_path)
+    let mut cmd = Command::new("node");
+    cmd.arg(&sidecar_path)
         .stdin(Stdio::piped())
         .stdout(Stdio::piped())
-        .stderr(Stdio::inherit())
-        .spawn()
-        .map_err(|e| {
+        .stderr(Stdio::inherit());
+
+    // In release builds, point the CJS sidecar at the workspace node_modules
+    // (path captured at compile time via build.rs / CARGO_MANIFEST_DIR).
+    #[cfg(not(debug_assertions))]
+    cmd.env("EPUBFORGE_NODE_MODULES", env!("EPUBFORGE_NODE_MODULES"));
+
+    let mut child = cmd.spawn().map_err(|e| {
             if e.kind() == std::io::ErrorKind::NotFound {
                 "Node.js não foi encontrado no PATH. \
                  Instale Node.js 20+ em https://nodejs.org"
@@ -112,7 +117,7 @@ fn run_sidecar(
 fn resolve_sidecar_path(app: &tauri::AppHandle) -> PathBuf {
     #[cfg(debug_assertions)]
     {
-        Path::new(env!("CARGO_MANIFEST_DIR")).join("../sidecar/index.mjs")
+        PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../sidecar/index.mjs")
     }
     #[cfg(not(debug_assertions))]
     {
@@ -120,7 +125,7 @@ fn resolve_sidecar_path(app: &tauri::AppHandle) -> PathBuf {
         app.path()
             .resource_dir()
             .expect("Não foi possível resolver o diretório de recursos")
-            .join("sidecar/bundle.cjs")
+            .join("sidecar/prod.cjs")
     }
 }
 

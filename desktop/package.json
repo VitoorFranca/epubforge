@@ -10,7 +10,7 @@
     "build": "tauri build",
     "vite": "vite --port 1420",
     "vite:build": "vite build",
-    "build:sidecar": "mkdir -p sidecar/assets && esbuild sidecar/index.mjs --bundle --platform=node --format=cjs --outfile=sidecar/bundle.cjs --external:fsevents --external:playwright --external:playwright-core --external:chromium-bidi && cp ../core/dist/epub/assets/styles.css sidecar/assets/styles.css",
+    "build:sidecar": "mkdir -p sidecar/assets && cp ../core/dist/epub/assets/styles.css sidecar/assets/styles.css",
     "tauri": "tauri"
   },
   "dependencies": {

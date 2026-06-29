@@ -12,7 +12,8 @@ import { generateEpub } from '@epubforge/core';
 const rl = createInterface({ input: process.stdin, crlfDelay: Infinity });
 
 rl.once('line', async (line) => {
-  rl.close();
+  // Do NOT call rl.close() here — it emits 'close' synchronously, which
+  // would trigger process.exit(0) before generateEpub() resolves.
 
   let request;
   try {
@@ -48,5 +49,3 @@ rl.once('line', async (line) => {
   }
 });
 
-// If stdin closes without a line (e.g. Rust side crashed), exit cleanly.
-rl.once('close', () => process.exit(0));

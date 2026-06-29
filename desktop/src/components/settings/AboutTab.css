@@ -1,0 +1,41 @@
+.about-tab {
+  padding-top: 4px;
+}
+
+.about-table {
+  border-collapse: collapse;
+  width: 100%;
+}
+
+.about-table tr + tr td {
+  padding-top: 12px;
+}
+
+.about-key {
+  font-size: 13px;
+  color: #888;
+  width: 160px;
+  vertical-align: top;
+  padding-right: 16px;
+}
+
+.about-value {
+  font-size: 13px;
+  color: #1a1a1a;
+  vertical-align: top;
+}
+
+.about-link {
+  background: transparent;
+  border: none;
+  padding: 0;
+  font-size: 13px;
+  color: #0066cc;
+  cursor: pointer;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+.about-link:hover {
+  color: #0044aa;
+}

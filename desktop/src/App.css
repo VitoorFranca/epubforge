@@ -13,6 +13,7 @@ body {
 }
 
 .app {
+  position: relative;
   padding: 40px 48px;
   display: flex;
   flex-direction: column;

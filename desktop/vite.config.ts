@@ -1,9 +1,15 @@
 import { defineConfig } from 'vite';
 import react from '@vitejs/plugin-react';
+import desktopPkg from './package.json' with { type: 'json' };
+import corePkg from '../core/package.json' with { type: 'json' };
 
 export default defineConfig({
   plugins: [react()],
   clearScreen: false,
+  define: {
+    __DESKTOP_VERSION__: JSON.stringify(desktopPkg.version),
+    __CORE_VERSION__: JSON.stringify(corePkg.version),
+  },
   server: {
     port: 1420,
     strictPort: true,

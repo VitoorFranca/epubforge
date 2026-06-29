@@ -124,11 +124,23 @@ fn resolve_sidecar_path(app: &tauri::AppHandle) -> PathBuf {
     }
 }
 
+#[tauri::command]
+async fn open_path(path: String) -> Result<(), String> {
+    Command::new("open")
+        .arg(&path)
+        .spawn()
+        .map_err(|e| format!("Não foi possível abrir o caminho: {e}"))?
+        .wait()
+        .map_err(|e| format!("Erro ao aguardar o comando open: {e}"))?;
+    Ok(())
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_dialog::init())
-        .invoke_handler(tauri::generate_handler![generate_epub])
+        .plugin(tauri_plugin_store::Builder::default().build())
+        .invoke_handler(tauri::generate_handler![generate_epub, open_path])
         .run(tauri::generate_context!())
         .expect("Erro ao iniciar a aplicação EpubForge")
 }

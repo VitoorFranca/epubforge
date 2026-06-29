@@ -21,19 +21,80 @@ struct SidecarResponse {
     error: Option<String>,
 }
 
-#[tauri::command]
-async fn generate_epub(
-    app: tauri::AppHandle,
-    url: String,
-    output_path: String,
-) -> Result<GenerateResult, String> {
-    let sidecar_path = resolve_sidecar_path(&app);
+/// Finds the `node` binary. GUI apps on macOS don't inherit the shell PATH,
+/// so we search a list of well-known locations used by common version managers
+/// (fnm, nvm, volta, homebrew, system) before giving up.
+fn find_node_binary() -> Option<PathBuf> {
+    // 1. Honour explicit override from the environment (e.g. in dev mode the
+    //    shell has fnm's shim directory on PATH, so Command::new("node") works).
+    if let Ok(output) = Command::new("node").arg("--version").output() {
+        if output.status.success() {
+            return Some(PathBuf::from("node"));
+        }
+    }
 
-    tauri::async_runtime::spawn_blocking(move || {
-        run_sidecar(sidecar_path, url, output_path)
-    })
-    .await
-    .map_err(|e| e.to_string())?
+    let home = std::env::var("HOME").unwrap_or_default();
+
+    let candidates: &[&str] = &[
+        // fnm default alias (version-independent stable symlink)
+        ".local/share/fnm/aliases/default/bin/node",
+        // volta
+        ".volta/bin/node",
+        // nvm default
+        ".nvm/versions/node/default/bin/node",
+        // homebrew (Apple Silicon)
+        // (absolute paths — no HOME prefix)
+    ];
+
+    for rel in candidates {
+        let p = PathBuf::from(&home).join(rel);
+        if p.exists() {
+            return Some(p);
+        }
+    }
+
+    // homebrew absolute paths
+    for abs in &["/opt/homebrew/bin/node", "/usr/local/bin/node", "/opt/local/bin/node"] {
+        let p = PathBuf::from(abs);
+        if p.exists() {
+            return Some(p);
+        }
+    }
+
+    // fnm: walk node-versions and pick the highest semver
+    let fnm_versions = PathBuf::from(&home).join(".local/share/fnm/node-versions");
+    if fnm_versions.is_dir() {
+        if let Ok(entries) = std::fs::read_dir(&fnm_versions) {
+            let mut versions: Vec<PathBuf> = entries
+                .flatten()
+                .map(|e| e.path())
+                .filter(|p| p.join("installation/bin/node").exists())
+                .collect();
+            // sort lexicographically — good enough for vMajor.Minor.Patch strings
+            versions.sort();
+            if let Some(latest) = versions.last() {
+                return Some(latest.join("installation/bin/node"));
+            }
+        }
+    }
+
+    // nvm: walk .nvm/versions/node/*/bin/node
+    let nvm_versions = PathBuf::from(&home).join(".nvm/versions/node");
+    if nvm_versions.is_dir() {
+        let mut versions: Vec<PathBuf> = std::fs::read_dir(&nvm_versions)
+            .into_iter()
+            .flatten()
+            .flatten()
+            .map(|e| e.path())
+            .filter(|p| p.join("bin/node").exists())
+            .collect();
+        versions.sort();
+        if let Some(latest) = versions.last() {
+            return Some(latest.join("bin/node"));
+        }
+    }
+
+    None
 }
 
 fn run_sidecar(
@@ -41,9 +102,14 @@ fn run_sidecar(
     url: String,
     output_path: String,
 ) -> Result<GenerateResult, String> {
+    let node = find_node_binary().ok_or_else(|| {
+        "Node.js não foi encontrado. Instale Node.js 20+ em https://nodejs.org e reinicie o app."
+            .to_string()
+    })?;
+
     let input = serde_json::json!({ "url": url, "outputPath": output_path });
 
-    let mut cmd = Command::new("node");
+    let mut cmd = Command::new(&node);
     cmd.arg(&sidecar_path)
         .stdin(Stdio::piped())
         .stdout(Stdio::piped())
@@ -55,16 +121,10 @@ fn run_sidecar(
     cmd.env("EPUBFORGE_NODE_MODULES", env!("EPUBFORGE_NODE_MODULES"));
 
     let mut child = cmd.spawn().map_err(|e| {
-            if e.kind() == std::io::ErrorKind::NotFound {
-                "Node.js não foi encontrado no PATH. \
-                 Instale Node.js 20+ em https://nodejs.org"
-                    .to_string()
-            } else {
-                format!("Não foi possível iniciar o Node.js: {e}")
-            }
-        })?;
+        format!("Não foi possível iniciar o Node.js ({node:?}): {e}")
+    })?;
 
-    // Write JSON request and close stdin so the sidecar sees EOF.
+    // Write JSON request; dropping stdin closes it so the sidecar sees EOF.
     {
         let mut stdin = child
             .stdin
@@ -111,6 +171,21 @@ fn run_sidecar(
     } else {
         Err(response.error.unwrap_or_else(|| "Erro desconhecido".to_string()))
     }
+}
+
+#[tauri::command]
+async fn generate_epub(
+    app: tauri::AppHandle,
+    url: String,
+    output_path: String,
+) -> Result<GenerateResult, String> {
+    let sidecar_path = resolve_sidecar_path(&app);
+
+    tauri::async_runtime::spawn_blocking(move || {
+        run_sidecar(sidecar_path, url, output_path)
+    })
+    .await
+    .map_err(|e| e.to_string())?
 }
 
 #[allow(unused_variables)]

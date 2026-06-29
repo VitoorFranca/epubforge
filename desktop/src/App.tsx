@@ -16,6 +16,11 @@ interface FetchResult {
   finalUrl: string;
 }
 
+interface ImageRef {
+  url: string;
+  name: string;
+}
+
 function applyUrlRules(url: string, rules: UrlRule[]): string {
   for (const rule of rules) {
     try {
@@ -26,6 +31,62 @@ function applyUrlRules(url: string, rules: UrlRule[]): string {
     } catch { /* invalid URL — skip rule */ }
   }
   return url;
+}
+
+/**
+ * Processes Readability article content:
+ * 1. Resolves all img src to absolute URLs
+ * 2. Assigns local names (images/img-N.ext) and collects the download list
+ * 3. Removes <source> and responsive attributes not meaningful in EPUB
+ * 4. Serializes to valid XHTML via XMLSerializer (self-closes void elements)
+ */
+function processContent(
+  html: string,
+  baseUrl: string,
+): { xhtml: string; images: ImageRef[] } {
+  const container = document.createElement('div');
+  container.innerHTML = html;
+
+  const images: ImageRef[] = [];
+  let idx = 0;
+
+  container.querySelectorAll('img').forEach((img) => {
+    const src = img.getAttribute('src');
+    if (!src || src.startsWith('data:')) return; // keep data URIs as-is
+
+    try {
+      const absUrl = new URL(src, baseUrl).href;
+      const urlPath = absUrl.split('?')[0].split('#')[0];
+      const rawExt = urlPath.split('.').pop()?.toLowerCase() ?? '';
+      const ext = ['jpg', 'jpeg', 'png', 'gif', 'webp', 'svg'].includes(rawExt)
+        ? rawExt === 'jpeg' ? 'jpg' : rawExt
+        : 'jpg';
+      const name = `images/img-${idx++}.${ext}`;
+
+      images.push({ url: absUrl, name });
+      img.setAttribute('src', name);
+    } catch {
+      img.removeAttribute('src');
+    }
+
+    // These attributes aren't meaningful in EPUB readers
+    img.removeAttribute('srcset');
+    img.removeAttribute('loading');
+    img.removeAttribute('decoding');
+    img.removeAttribute('sizes');
+  });
+
+  // <source> inside <picture>/<video>/<audio> references URLs we're not embedding
+  container.querySelectorAll('source').forEach((s) => s.remove());
+
+  // Serialize the DOM back to valid XHTML — XMLSerializer self-closes void
+  // elements like <img>, <br>, <hr>, <source>, fixing the EPUB validator errors
+  const serializer = new XMLSerializer();
+  const xhtml = Array.from(container.childNodes)
+    .map((node) => serializer.serializeToString(node))
+    .join('');
+
+  return { xhtml, images };
 }
 
 export default function App() {
@@ -59,14 +120,12 @@ export default function App() {
     setStatus({ kind: 'generating' });
 
     try {
-      // Step 1: Fetch HTML in Rust (bypasses CORS, handles redirects)
+      // Step 1: Rust fetches the HTML (bypasses CORS, follows redirects)
       const { html, finalUrl } = await invoke<FetchResult>('fetch_url', { url: effectiveUrl });
 
-      // Step 2: Extract article content with Readability (runs in browser DOM)
+      // Step 2: Readability extracts the article content from the DOM
       const parser = new DOMParser();
       const doc = parser.parseFromString(html, 'text/html');
-
-      // Set base so relative URLs in images/links resolve correctly
       const base = doc.createElement('base');
       base.href = finalUrl;
       doc.head.prepend(base);
@@ -74,22 +133,27 @@ export default function App() {
       const reader = new Readability(doc);
       const article = reader.parse();
 
-      if (!article || !article.content) {
+      if (!article?.content) {
         throw new Error(
-          'Não foi possível extrair o conteúdo desta página. Tente uma URL diferente ou verifique se a página está acessível.',
+          'Não foi possível extrair o conteúdo desta página. ' +
+          'Verifique se a URL está correta e acessível.',
         );
       }
 
-      // Step 3: Build EPUB in Rust (epub-builder crate, no Pandoc needed)
+      // Step 3: Convert HTML→XHTML and collect image download list
+      const { xhtml, images } = processContent(article.content, finalUrl);
+
+      // Step 4: Rust builds the EPUB (epub-builder crate, downloads images)
       const result = await invoke<GenerateResult>('build_epub', {
         article: {
           title: article.title || new URL(finalUrl).hostname,
-          content: article.content,
+          content: xhtml,
           excerpt: article.excerpt,
           byline: article.byline,
           lang: article.lang,
           siteName: article.siteName,
           publishedTime: article.publishedTime,
+          images,
         },
         outputPath,
       });

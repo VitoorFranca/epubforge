@@ -7,7 +7,7 @@
     "frontendDist": "../dist",
     "devUrl": "http://localhost:1420",
     "beforeDevCommand": "npm run vite",
-    "beforeBuildCommand": "npm run build:sidecar && npm run vite:build"
+    "beforeBuildCommand": "npm run vite:build"
   },
   "app": {
     "windows": [
@@ -32,10 +32,6 @@
       "icons/128x128@2x.png",
       "icons/icon.icns",
       "icons/icon.ico"
-    ],
-    "resources": {
-      "../sidecar/prod.cjs": "sidecar/prod.cjs",
-      "../sidecar/assets/styles.css": "sidecar/assets/styles.css"
-    }
+    ]
   }
 }

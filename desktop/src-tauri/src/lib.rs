@@ -1,207 +1,162 @@
-use std::io::{BufRead, BufReader, Write};
 use std::path::PathBuf;
-use std::process::{Command, Stdio};
-use serde::Serialize;
+use std::process::Command;
+use serde::{Deserialize, Serialize};
+
+const EPUB_CSS: &str = include_str!("epub_styles.css");
+
+// ── Types ────────────────────────────────────────────────────────────────────
 
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
-struct GenerateResult {
+struct FetchResult {
+    html: String,
+    final_url: String,
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct Article {
+    title: String,
+    content: String,
+    excerpt: Option<String>,
+    byline: Option<String>,
+    lang: Option<String>,
+    site_name: Option<String>,
+    published_time: Option<String>,
+}
+
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+struct EpubResult {
     output_path: String,
     title: String,
     size_bytes: u64,
 }
 
-#[derive(serde::Deserialize)]
-#[serde(rename_all = "camelCase")]
-struct SidecarResponse {
-    success: bool,
-    output_path: Option<String>,
-    title: Option<String>,
-    size_bytes: Option<u64>,
-    error: Option<String>,
-}
+// ── Commands ─────────────────────────────────────────────────────────────────
 
-/// Finds the `node` binary. GUI apps on macOS don't inherit the shell PATH,
-/// so we search a list of well-known locations used by common version managers
-/// (fnm, nvm, volta, homebrew, system) before giving up.
-fn find_node_binary() -> Option<PathBuf> {
-    // 1. Honour explicit override from the environment (e.g. in dev mode the
-    //    shell has fnm's shim directory on PATH, so Command::new("node") works).
-    if let Ok(output) = Command::new("node").arg("--version").output() {
-        if output.status.success() {
-            return Some(PathBuf::from("node"));
-        }
-    }
-
-    let home = std::env::var("HOME").unwrap_or_default();
-
-    let candidates: &[&str] = &[
-        // fnm default alias (version-independent stable symlink)
-        ".local/share/fnm/aliases/default/bin/node",
-        // volta
-        ".volta/bin/node",
-        // nvm default
-        ".nvm/versions/node/default/bin/node",
-        // homebrew (Apple Silicon)
-        // (absolute paths — no HOME prefix)
-    ];
-
-    for rel in candidates {
-        let p = PathBuf::from(&home).join(rel);
-        if p.exists() {
-            return Some(p);
-        }
-    }
-
-    // homebrew absolute paths
-    for abs in &["/opt/homebrew/bin/node", "/usr/local/bin/node", "/opt/local/bin/node"] {
-        let p = PathBuf::from(abs);
-        if p.exists() {
-            return Some(p);
-        }
-    }
-
-    // fnm: walk node-versions and pick the highest semver
-    let fnm_versions = PathBuf::from(&home).join(".local/share/fnm/node-versions");
-    if fnm_versions.is_dir() {
-        if let Ok(entries) = std::fs::read_dir(&fnm_versions) {
-            let mut versions: Vec<PathBuf> = entries
-                .flatten()
-                .map(|e| e.path())
-                .filter(|p| p.join("installation/bin/node").exists())
-                .collect();
-            // sort lexicographically — good enough for vMajor.Minor.Patch strings
-            versions.sort();
-            if let Some(latest) = versions.last() {
-                return Some(latest.join("installation/bin/node"));
-            }
-        }
-    }
-
-    // nvm: walk .nvm/versions/node/*/bin/node
-    let nvm_versions = PathBuf::from(&home).join(".nvm/versions/node");
-    if nvm_versions.is_dir() {
-        let mut versions: Vec<PathBuf> = std::fs::read_dir(&nvm_versions)
-            .into_iter()
-            .flatten()
-            .flatten()
-            .map(|e| e.path())
-            .filter(|p| p.join("bin/node").exists())
-            .collect();
-        versions.sort();
-        if let Some(latest) = versions.last() {
-            return Some(latest.join("bin/node"));
-        }
-    }
-
-    None
-}
-
-fn run_sidecar(
-    sidecar_path: PathBuf,
-    url: String,
-    output_path: String,
-) -> Result<GenerateResult, String> {
-    let node = find_node_binary().ok_or_else(|| {
-        "Node.js não foi encontrado. Instale Node.js 20+ em https://nodejs.org e reinicie o app."
-            .to_string()
-    })?;
-
-    let input = serde_json::json!({ "url": url, "outputPath": output_path });
-
-    let mut cmd = Command::new(&node);
-    cmd.arg(&sidecar_path)
-        .stdin(Stdio::piped())
-        .stdout(Stdio::piped())
-        .stderr(Stdio::inherit());
-
-    // In release builds, point the CJS sidecar at the workspace node_modules
-    // (path captured at compile time via build.rs / CARGO_MANIFEST_DIR).
-    #[cfg(not(debug_assertions))]
-    cmd.env("EPUBFORGE_NODE_MODULES", env!("EPUBFORGE_NODE_MODULES"));
-
-    let mut child = cmd.spawn().map_err(|e| {
-        format!("Não foi possível iniciar o Node.js ({node:?}): {e}")
-    })?;
-
-    // Write JSON request; dropping stdin closes it so the sidecar sees EOF.
-    {
-        let mut stdin = child
-            .stdin
-            .take()
-            .ok_or("Falha ao obter stdin do sidecar")?;
-        stdin
-            .write_all(format!("{}\n", input).as_bytes())
-            .map_err(|e| format!("Falha ao enviar dados para o sidecar: {e}"))?;
-    }
-
-    // Read one JSON response line from stdout.
-    let stdout = child
-        .stdout
-        .take()
-        .ok_or("Sem stdout disponível do sidecar")?;
-    let mut reader = BufReader::new(stdout);
-    let mut response_line = String::new();
-    reader
-        .read_line(&mut response_line)
-        .map_err(|e| format!("Falha ao ler resposta do sidecar: {e}"))?;
-
-    child
-        .wait()
-        .map_err(|e| format!("Sidecar encerrou com erro: {e}"))?;
-
-    let trimmed = response_line.trim();
-    if trimmed.is_empty() {
-        return Err(
-            "Sidecar não retornou nenhuma resposta. \
-             Verifique se o Pandoc e o Chromium estão instalados."
-                .to_string(),
-        );
-    }
-
-    let response: SidecarResponse = serde_json::from_str(trimmed)
-        .map_err(|e| format!("Resposta inválida do sidecar: {e}"))?;
-
-    if response.success {
-        Ok(GenerateResult {
-            output_path: response.output_path.unwrap_or_default(),
-            title: response.title.unwrap_or_default(),
-            size_bytes: response.size_bytes.unwrap_or(0),
-        })
-    } else {
-        Err(response.error.unwrap_or_else(|| "Erro desconhecido".to_string()))
-    }
-}
-
+/// Fetches the raw HTML for a URL using Rust's HTTP client.
+/// Runs in Rust so it bypasses browser CORS restrictions completely.
 #[tauri::command]
-async fn generate_epub(
-    app: tauri::AppHandle,
-    url: String,
-    output_path: String,
-) -> Result<GenerateResult, String> {
-    let sidecar_path = resolve_sidecar_path(&app);
+async fn fetch_url(url: String) -> Result<FetchResult, String> {
+    use reqwest::header;
 
-    tauri::async_runtime::spawn_blocking(move || {
-        run_sidecar(sidecar_path, url, output_path)
-    })
-    .await
-    .map_err(|e| e.to_string())?
+    let client = reqwest::Client::builder()
+        .user_agent("Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36")
+        .redirect(reqwest::redirect::Policy::limited(10))
+        .gzip(true)
+        .brotli(true)
+        .cookie_store(true)
+        .timeout(std::time::Duration::from_secs(30))
+        .build()
+        .map_err(|e| format!("Falha ao criar cliente HTTP: {e}"))?;
+
+    let response = client
+        .get(&url)
+        .header(header::ACCEPT, "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8")
+        .header(header::ACCEPT_LANGUAGE, "pt-BR,pt;q=0.9,en-US;q=0.8,en;q=0.7")
+        .send()
+        .await
+        .map_err(|e| format!("Falha ao acessar a URL: {e}"))?;
+
+    let final_url = response.url().to_string();
+    let status = response.status();
+
+    if !status.is_success() {
+        return Err(format!("HTTP {status} ao acessar {url}"));
+    }
+
+    let html = response.text().await
+        .map_err(|e| format!("Falha ao ler o conteúdo da página: {e}"))?;
+
+    Ok(FetchResult { html, final_url })
 }
 
-#[allow(unused_variables)]
-fn resolve_sidecar_path(app: &tauri::AppHandle) -> PathBuf {
-    #[cfg(debug_assertions)]
-    {
-        PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../sidecar/index.mjs")
+/// Builds an EPUB file from the article extracted by Readability in the frontend.
+#[tauri::command]
+async fn build_epub(article: Article, output_path: String) -> Result<EpubResult, String> {
+    use epub_builder::{EpubBuilder, EpubContent, ReferenceType, ZipLibrary};
+
+    let lang = article.lang.as_deref().unwrap_or("en");
+    let title_escaped = escape_html(&article.title);
+
+    let xhtml = format!(
+        r#"<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE html>
+<html xmlns="http://www.w3.org/1999/xhtml" lang="{lang}">
+<head>
+  <meta charset="utf-8" />
+  <title>{title_escaped}</title>
+</head>
+<body>
+{content}
+</body>
+</html>"#,
+        content = article.content,
+    );
+
+    let output = PathBuf::from(&output_path);
+
+    let file = std::fs::File::create(&output)
+        .map_err(|e| format!("Não foi possível criar o arquivo: {e}"))?;
+
+    let mut builder = EpubBuilder::new(
+        ZipLibrary::new().map_err(|e| format!("Erro ao criar zip: {e}"))?,
+    )
+    .map_err(|e| format!("Erro ao criar EPUB: {e}"))?;
+
+    builder
+        .metadata("title", &article.title)
+        .map_err(|e| e.to_string())?;
+
+    builder.set_lang(lang);
+
+    if let Some(author) = &article.byline {
+        let trimmed = author.trim();
+        if !trimmed.is_empty() && !trimmed.starts_with('@') {
+            builder.metadata("author", trimmed).map_err(|e| e.to_string())?;
+        }
     }
-    #[cfg(not(debug_assertions))]
-    {
-        use tauri::Manager;
-        app.path()
-            .resource_dir()
-            .expect("Não foi possível resolver o diretório de recursos")
-            .join("sidecar/prod.cjs")
+
+    if let Some(desc) = &article.excerpt {
+        if !desc.trim().is_empty() {
+            builder.metadata("description", desc.trim()).map_err(|e| e.to_string())?;
+        }
     }
+
+    if let Some(publisher) = &article.site_name {
+        if !publisher.trim().is_empty() {
+            builder.metadata("publisher", publisher.trim()).map_err(|e| e.to_string())?;
+        }
+    }
+
+    if let Some(date) = &article.published_time {
+        builder.metadata("date", date.trim()).map_err(|e| e.to_string())?;
+    }
+
+    builder
+        .stylesheet(EPUB_CSS.as_bytes())
+        .map_err(|e| e.to_string())?;
+
+    builder
+        .add_content(
+            EpubContent::new("content.xhtml", xhtml.as_bytes())
+                .title(&article.title)
+                .reftype(ReferenceType::Text),
+        )
+        .map_err(|e| e.to_string())?;
+
+    builder
+        .generate(file)
+        .map_err(|e| format!("Erro ao gerar EPUB: {e}"))?;
+
+    let size_bytes = std::fs::metadata(&output).map(|m| m.len()).unwrap_or(0);
+
+    Ok(EpubResult {
+        output_path,
+        title: article.title,
+        size_bytes,
+    })
 }
 
 #[tauri::command]
@@ -215,12 +170,23 @@ async fn open_path(path: String) -> Result<(), String> {
     Ok(())
 }
 
+// ── Helpers ──────────────────────────────────────────────────────────────────
+
+fn escape_html(s: &str) -> String {
+    s.replace('&', "&amp;")
+        .replace('<', "&lt;")
+        .replace('>', "&gt;")
+        .replace('"', "&quot;")
+}
+
+// ── App entry point ───────────────────────────────────────────────────────────
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_store::Builder::default().build())
-        .invoke_handler(tauri::generate_handler![generate_epub, open_path])
+        .invoke_handler(tauri::generate_handler![fetch_url, build_epub, open_path])
         .run(tauri::generate_context!())
         .expect("Erro ao iniciar a aplicação EpubForge")
 }

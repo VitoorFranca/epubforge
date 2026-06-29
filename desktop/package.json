@@ -10,22 +10,21 @@
     "build": "tauri build",
     "vite": "vite --port 1420",
     "vite:build": "vite build",
-    "build:sidecar": "mkdir -p sidecar/assets && cp ../core/dist/epub/assets/styles.css sidecar/assets/styles.css",
     "tauri": "tauri"
   },
   "dependencies": {
-    "@epubforge/core": "^1.0.0",
+    "@mozilla/readability": "^0.5.0",
     "@tauri-apps/api": "^2",
     "@tauri-apps/plugin-dialog": "^2",
     "@tauri-apps/plugin-store": "^2"
   },
   "devDependencies": {
     "@tauri-apps/cli": "^2",
+    "@types/mozilla__readability": "^0.4.2",
     "@types/node": "^22",
     "@types/react": "^18",
     "@types/react-dom": "^18",
     "@vitejs/plugin-react": "^4",
-    "esbuild": "^0.24",
     "react": "^18",
     "react-dom": "^18",
     "typescript": "^5.6",
